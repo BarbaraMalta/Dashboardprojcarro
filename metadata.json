@@ -1,0 +1,8 @@
+{
+  "name": "Dashboard Rotas",
+  "description": "Dashboard de observabilidade e monitoramento de operações do carrinho autônomo de transporte",
+  "requestFramePermissions": [],
+  "majorCapabilities": [
+    "MAJOR_CAPABILITY_SERVER_SIDE_GEMINI_API"
+  ]
+}
