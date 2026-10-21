@@ -66,7 +66,13 @@ export interface Mission {
   errorCount: number;
   eventCount: number;
   stopReasons: StopReasonCount[];
-  events: LogEvent[];
+  /**
+   * Linha do tempo completa da missão.
+   *
+   * Opcional na listagem (`GET /missions`) para manter a resposta leve —
+   * o modal de detalhe busca em `GET /missions/:id` quando ausente.
+   */
+  events?: LogEvent[];
 }
 
 export interface Alert {
@@ -126,11 +132,19 @@ export interface PaginationParams {
   total: number;
 }
 
-export type DataSourceType = 'mock' | 'imported' | 'api';
-
 export interface ApiResponse<T> {
   success: boolean;
   data: T;
   message?: string;
   error?: string;
+  /** Total de registros disponíveis no backend (endpoints de listagem). */
+  total?: number;
+  page?: number;
+  pageSize?: number;
+}
+
+/** Resultado de POST /logs/import — ver BACKEND_INTEGRATION.md §3.6 */
+export interface ImportResult {
+  importedCount: number;
+  ignoredCount?: number;
 }

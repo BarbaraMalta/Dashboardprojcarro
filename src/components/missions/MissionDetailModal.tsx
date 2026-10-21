@@ -3,7 +3,7 @@
  * SPDX-License-Identifier: Apache-2.0
  */
 
-import React from 'react';
+import React, { useEffect, useState } from 'react';
 import {
   X,
   Clock,
@@ -14,7 +14,9 @@ import {
   ArrowRight,
   ShieldAlert,
 } from 'lucide-react';
-import { Mission } from '../../types';
+import { LogEvent, Mission } from '../../types';
+import { getMissionById } from '../../services/missionsService';
+import { toErrorMessage } from '../../services/api';
 import { formatDateTime, formatDuration } from '../../utils/formatters';
 import { MissionStatusBadge, SeverityBadge } from '../common/StatusBadge';
 
@@ -28,6 +30,52 @@ export const MissionDetailModal: React.FC<MissionDetailModalProps> = ({
   mission,
   onClose,
 }) => {
+  const missionId = mission?.id;
+  const listedEvents = mission?.events;
+
+  const [events, setEvents] = useState<LogEvent[]>(listedEvents ?? []);
+  const [loadingEvents, setLoadingEvents] = useState(false);
+  const [eventsError, setEventsError] = useState<string | null>(null);
+
+  /**
+   * A listagem (`GET /missions`) pode devolver as missões sem a linha do
+   * tempo, para manter a resposta leve. Nesse caso o detalhe é buscado sob
+   * demanda em `GET /missions/:id` ao abrir o modal.
+   */
+  useEffect(() => {
+    if (!missionId) return;
+
+    if (listedEvents && listedEvents.length > 0) {
+      setEvents(listedEvents);
+      setEventsError(null);
+      return;
+    }
+
+    let mounted = true;
+    const loadDetail = async () => {
+      setLoadingEvents(true);
+      setEventsError(null);
+      try {
+        const detail = await getMissionById(missionId);
+        if (mounted) {
+          setEvents(detail?.events ?? []);
+          setLoadingEvents(false);
+        }
+      } catch (err) {
+        if (mounted) {
+          setEventsError(toErrorMessage(err));
+          setEvents([]);
+          setLoadingEvents(false);
+        }
+      }
+    };
+
+    loadDetail();
+    return () => {
+      mounted = false;
+    };
+  }, [missionId, listedEvents]);
+
   if (!mission) return null;
 
   return (
@@ -188,8 +236,26 @@ export const MissionDetailModal: React.FC<MissionDetailModalProps> = ({
               Linha do Tempo de Eventos
             </h3>
 
+            {loadingEvents && (
+              <p className="text-xs text-[#78877D] animate-pulse">
+                Carregando linha do tempo da missão...
+              </p>
+            )}
+
+            {eventsError && (
+              <p className="text-xs text-[#922B21] bg-[#FDEDEC] border border-[#F5B7B1] rounded-lg p-3">
+                Não foi possível carregar os eventos desta missão: {eventsError}
+              </p>
+            )}
+
+            {!loadingEvents && !eventsError && events.length === 0 && (
+              <p className="text-xs text-[#78877D]">
+                Nenhum evento registrado para esta missão.
+              </p>
+            )}
+
             <div className="relative pl-6 space-y-4 before:absolute before:left-2 before:top-2 before:bottom-2 before:w-0.5 before:bg-[#E4ECE6]">
-              {mission.events.map((event) => (
+              {events.map((event) => (
                 <div key={event.id} className="relative flex items-start gap-3">
                   {/* Timeline Node */}
                   <div

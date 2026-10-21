@@ -4,37 +4,28 @@
  */
 
 import { DashboardMetrics, GlobalFilterState } from '../types';
-import { calculateDashboardMetrics, filterByTimePeriod } from '../utils/metrics';
 import { apiRequest } from './api';
-import { getMissions } from './missionsService';
-import { getDataSource, getStoredEvents } from './store';
 
 /**
- * Retrieves dashboard KPI metrics
+ * Obtém os KPIs agregados exibidos no dashboard e na página de desempenho.
+ *
+ * Backend: `GET /dashboard/metrics` — ver BACKEND_INTEGRATION.md §3.2.
+ * A agregação (médias, medianas, taxas) é responsabilidade do backend:
+ * o frontend apenas formata e exibe os números recebidos.
  */
 export async function getDashboardMetrics(
   filters?: GlobalFilterState
 ): Promise<DashboardMetrics> {
-  const mode = getDataSource();
+  const params = new URLSearchParams();
 
-  if (mode === 'api') {
-    const params = new URLSearchParams();
-    if (filters?.period) params.set('period', filters.period);
-    if (filters?.origin) params.set('origin', filters.origin);
-    if (filters?.destination) params.set('destination', filters.destination);
+  if (filters?.period) params.set('period', filters.period);
+  if (filters?.startDate) params.set('startDate', filters.startDate);
+  if (filters?.endDate) params.set('endDate', filters.endDate);
+  if (filters?.origin) params.set('origin', filters.origin);
+  if (filters?.destination) params.set('destination', filters.destination);
 
-    const query = params.toString() ? `?${params.toString()}` : '';
-    const res = await apiRequest<DashboardMetrics>(`dashboard/metrics${query}`);
-    return res.data;
-  }
+  const query = params.toString() ? `?${params.toString()}` : '';
+  const res = await apiRequest<DashboardMetrics>(`dashboard/metrics${query}`);
 
-  // Local / Mock computation
-  const missions = await getMissions(filters);
-  let events = getStoredEvents();
-
-  if (filters?.period) {
-    events = filterByTimePeriod(events, filters.period, filters.startDate, filters.endDate);
-  }
-
-  return calculateDashboardMetrics(missions, events);
+  return res.data;
 }

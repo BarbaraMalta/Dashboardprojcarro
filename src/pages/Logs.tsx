@@ -16,10 +16,12 @@ import {
 } from 'lucide-react';
 import { EventSeverity, EventType, LogEvent, TimePeriod } from '../types';
 import { getLogs } from '../services/logsService';
+import { toErrorMessage } from '../services/api';
 import { formatDateTime, getEventTypeLabel, getRoverStateLabel } from '../utils/formatters';
 import { SeverityBadge } from '../components/common/StatusBadge';
 import { Pagination } from '../components/common/Pagination';
 import { EmptyState } from '../components/common/EmptyState';
+import { ErrorState } from '../components/common/ErrorState';
 import { LogDetailModal } from '../components/logs/LogDetailModal';
 
 interface LogsProps {
@@ -29,6 +31,8 @@ interface LogsProps {
 export const Logs: React.FC<LogsProps> = ({ refreshTrigger }) => {
   const [logs, setLogs] = useState<LogEvent[]>([]);
   const [loading, setLoading] = useState<boolean>(true);
+  const [error, setError] = useState<string | null>(null);
+  const [retryCount, setRetryCount] = useState(0);
 
   // Filters
   const [search, setSearch] = useState('');
@@ -51,14 +55,19 @@ export const Logs: React.FC<LogsProps> = ({ refreshTrigger }) => {
     let mounted = true;
     const loadLogs = async () => {
       setLoading(true);
+      setError(null);
       try {
-        const data = await getLogs();
+        const data = await getLogs({ period: periodFilter });
         if (mounted) {
           setLogs(data);
           setLoading(false);
         }
-      } catch {
-        if (mounted) setLoading(false);
+      } catch (err) {
+        if (mounted) {
+          setError(toErrorMessage(err));
+          setLogs([]);
+          setLoading(false);
+        }
       }
     };
 
@@ -66,7 +75,7 @@ export const Logs: React.FC<LogsProps> = ({ refreshTrigger }) => {
     return () => {
       mounted = false;
     };
-  }, [refreshTrigger]);
+  }, [refreshTrigger, retryCount, periodFilter]);
 
   const handleFilterChange = (setter: (val: any) => void, val: any) => {
     setter(val);
@@ -246,6 +255,11 @@ export const Logs: React.FC<LogsProps> = ({ refreshTrigger }) => {
           <div className="p-8 text-center text-xs text-[#78877D] animate-pulse">
             Carregando eventos do sistema...
           </div>
+        ) : error ? (
+          <ErrorState
+            message={error}
+            onRetry={() => setRetryCount((prev) => prev + 1)}
+          />
         ) : filteredLogs.length === 0 ? (
           <EmptyState
             title="Nenhum registro encontrado"

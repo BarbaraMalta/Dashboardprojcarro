@@ -42,6 +42,8 @@ import { getMissions } from '../services/missionsService';
 import { getLogs } from '../services/logsService';
 import { getAlerts, acknowledgeAlert } from '../services/alertsService';
 import { getDashboardMetrics } from '../services/metricsService';
+import { toErrorMessage } from '../services/api';
+import { ErrorState } from '../components/common/ErrorState';
 import {
   Alert,
   DashboardMetrics,
@@ -70,6 +72,8 @@ export const Dashboard: React.FC<DashboardProps> = ({
   const [startDate, setStartDate] = useState<string | undefined>();
   const [endDate, setEndDate] = useState<string | undefined>();
   const [loading, setLoading] = useState<boolean>(true);
+  const [error, setError] = useState<string | null>(null);
+  const [retryCount, setRetryCount] = useState(0);
 
   const [metrics, setMetrics] = useState<DashboardMetrics | null>(null);
   const [missions, setMissions] = useState<Mission[]>([]);
@@ -88,6 +92,7 @@ export const Dashboard: React.FC<DashboardProps> = ({
     let mounted = true;
     const fetchData = async () => {
       setLoading(true);
+      setError(null);
       try {
         const [mMetrics, mMissions, mLogs, mAlerts] = await Promise.all([
           getDashboardMetrics(filterState),
@@ -104,7 +109,14 @@ export const Dashboard: React.FC<DashboardProps> = ({
           setLoading(false);
         }
       } catch (err) {
-        if (mounted) setLoading(false);
+        if (mounted) {
+          setError(toErrorMessage(err));
+          setMetrics(null);
+          setMissions([]);
+          setRecentLogs([]);
+          setPriorityAlerts([]);
+          setLoading(false);
+        }
       }
     };
 
@@ -112,7 +124,7 @@ export const Dashboard: React.FC<DashboardProps> = ({
     return () => {
       mounted = false;
     };
-  }, [filterState, refreshTrigger, period]);
+  }, [filterState, refreshTrigger, period, retryCount]);
 
   // Handle local acknowledgment
   const handleAcknowledge = async (alertId: string) => {
@@ -192,6 +204,14 @@ export const Dashboard: React.FC<DashboardProps> = ({
           }}
         />
       </div>
+
+      {error ? (
+        <ErrorState
+          message={error}
+          onRetry={() => setRetryCount((prev) => prev + 1)}
+        />
+      ) : (
+      <>
 
       {/* KPI Cards Grid */}
       <div className="grid grid-cols-1 sm:grid-cols-2 lg:grid-cols-4 gap-4">
@@ -598,6 +618,9 @@ export const Dashboard: React.FC<DashboardProps> = ({
           </div>
         </div>
       </div>
+
+      </>
+      )}
 
       {/* Modals */}
       {selectedMission && (

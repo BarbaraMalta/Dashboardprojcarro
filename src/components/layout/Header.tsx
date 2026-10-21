@@ -4,8 +4,7 @@
  */
 
 import React from 'react';
-import { Menu, RefreshCw, Upload, Database, CheckCircle2 } from 'lucide-react';
-import { DataSourceType } from '../../types';
+import { Menu, RefreshCw, Upload } from 'lucide-react';
 
 interface HeaderProps {
   title: string;
@@ -13,7 +12,6 @@ interface HeaderProps {
   onOpenMobile: () => void;
   onRefresh: () => void;
   isRefreshing: boolean;
-  dataSource: DataSourceType;
   onNavigateToImport: () => void;
 }
 
@@ -23,7 +21,6 @@ export const Header: React.FC<HeaderProps> = ({
   onOpenMobile,
   onRefresh,
   isRefreshing,
-  dataSource,
   onNavigateToImport,
 }) => {
   return (
@@ -55,18 +52,6 @@ export const Header: React.FC<HeaderProps> = ({
 
       {/* Zone 2 & 3: Status & Functional Actions */}
       <div className="flex items-center gap-3 shrink-0">
-        {/* Source indicator */}
-        <div className="hidden lg:flex items-center gap-1.5 px-2.5 py-1 rounded-md text-xs font-medium bg-[#F0F7F3] border border-[#E4ECE6] text-[#245C43]">
-          <Database className="w-3.5 h-3.5" />
-          <span>
-            {dataSource === 'mock'
-              ? 'Modo Demonstração'
-              : dataSource === 'imported'
-              ? 'Arquivo Carregado'
-              : 'API Conectada'}
-          </span>
-        </div>
-
         {/* Quick Refresh */}
         <button
           type="button"

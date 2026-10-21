@@ -11,30 +11,31 @@ import {
   CheckCircle2,
   AlertTriangle,
   Download,
-  RotateCcw,
   Eye,
   Check,
   X,
   ArrowRight,
 } from 'lucide-react';
-import { LogEvent, DataSourceType } from '../types';
 import { parseJsonLogs, parseCsvLogs, ParseResult } from '../utils/logParser';
 import { importLogs } from '../services/logsService';
-import { resetToMockEvents, getDataSource } from '../services/store';
-import { SAMPLE_JSON_EXPORT, SAMPLE_CSV_EXPORT } from '../data/mockData';
+import { toErrorMessage, API_BASE_URL } from '../services/api';
+import {
+  LOG_FORMAT_TEMPLATE_CSV,
+  LOG_FORMAT_TEMPLATE_JSON,
+} from '../utils/logFormatTemplate';
 import { formatDateTime, getEventTypeLabel } from '../utils/formatters';
 import { SeverityBadge } from '../components/common/StatusBadge';
 
 interface ImportProps {
   onImportSuccess: () => void;
-  dataSource: DataSourceType;
 }
 
-export const Import: React.FC<ImportProps> = ({ onImportSuccess, dataSource }) => {
+export const Import: React.FC<ImportProps> = ({ onImportSuccess }) => {
   const [dragActive, setDragActive] = useState(false);
   const [selectedFile, setSelectedFile] = useState<File | null>(null);
   const [parseResult, setParseResult] = useState<ParseResult | null>(null);
   const [isProcessing, setIsProcessing] = useState(false);
+  const [isSending, setIsSending] = useState(false);
   const [importStatus, setImportStatus] = useState<{
     success?: boolean;
     message?: string;
@@ -108,41 +109,43 @@ export const Import: React.FC<ImportProps> = ({ onImportSuccess, dataSource }) =
   const handleConfirmImport = async () => {
     if (!parseResult || parseResult.validEvents.length === 0) return;
 
+    setIsSending(true);
+    setImportStatus(null);
+
     try {
-      await importLogs(parseResult.validEvents);
+      const result = await importLogs(parseResult.validEvents);
+      const ignored = result.ignoredCount ?? 0;
+
       setImportStatus({
         success: true,
-        message: `${parseResult.validEvents.length} logs operacionais importados com sucesso! O dashboard foi atualizado.`,
+        message:
+          `${result.importedCount} evento(s) enviados e persistidos pelo backend.` +
+          (ignored > 0 ? ` ${ignored} ignorado(s) por duplicidade.` : '') +
+          ' O dashboard foi atualizado.',
       });
+      setSelectedFile(null);
+      setParseResult(null);
       onImportSuccess();
     } catch (err) {
       setImportStatus({
         success: false,
-        message: 'Erro ao importar logs no sistema.',
+        message: `Falha ao enviar os logs para o backend: ${toErrorMessage(err)}`,
       });
+    } finally {
+      setIsSending(false);
     }
   };
 
-  const handleResetDemoData = () => {
-    resetToMockEvents();
-    setSelectedFile(null);
-    setParseResult(null);
-    setImportStatus({
-      success: true,
-      message: 'Base restaurada com sucesso para os dados de demonstração originais.',
-    });
-    onImportSuccess();
-  };
-
-  const handleDownloadSample = (type: 'json' | 'csv') => {
-    const content = type === 'json' ? SAMPLE_JSON_EXPORT : SAMPLE_CSV_EXPORT;
+  const handleDownloadTemplate = (type: 'json' | 'csv') => {
+    const content =
+      type === 'json' ? LOG_FORMAT_TEMPLATE_JSON : LOG_FORMAT_TEMPLATE_CSV;
     const blob = new Blob([content], {
       type: type === 'json' ? 'application/json' : 'text/csv',
     });
     const url = URL.createObjectURL(blob);
     const a = document.createElement('a');
     a.href = url;
-    a.download = `carrinho_logs_exemplo.${type}`;
+    a.download = `modelo_formato_logs.${type}`;
     a.click();
     URL.revokeObjectURL(url);
   };
@@ -159,34 +162,19 @@ export const Import: React.FC<ImportProps> = ({ onImportSuccess, dataSource }) =
         </p>
       </div>
 
-      {/* Mode Status Banner */}
-      <div className="flex flex-col sm:flex-row sm:items-center justify-between gap-3 p-4 bg-[#F0F7F3] rounded-xl border border-[#E4ECE6]">
-        <div>
-          <div className="text-xs font-bold text-[#245C43]">
-            Fonte Atual:{' '}
-            <span className="font-semibold text-[#25372D]">
-              {dataSource === 'mock'
-                ? 'Dados de Demonstração'
-                : dataSource === 'imported'
-                ? 'Arquivo Importado pelo Usuário'
-                : 'Serviço de Backend API'}
-            </span>
-          </div>
-          <p className="text-xs text-[#78877D] mt-0.5">
-            O processamento é realizado diretamente no seu navegador, sem envio de dados a servidores externos.
-          </p>
+      {/* Destino da importação */}
+      <div className="p-4 bg-[#F0F7F3] rounded-xl border border-[#E4ECE6]">
+        <div className="text-xs font-bold text-[#245C43]">
+          Destino dos registros:{' '}
+          <span className="font-mono font-semibold text-[#25372D]">
+            POST {API_BASE_URL}/logs/import
+          </span>
         </div>
-
-        {dataSource === 'imported' && (
-          <button
-            type="button"
-            onClick={handleResetDemoData}
-            className="flex items-center gap-1.5 px-3 py-1.5 rounded-lg border border-[#E4ECE6] bg-white text-xs font-semibold text-[#25372D] hover:bg-[#F7FAF8] transition-colors shrink-0"
-          >
-            <RotateCcw className="w-3.5 h-3.5 text-[#245C43]" />
-            <span>Restaurar Demonstração</span>
-          </button>
-        )}
+        <p className="text-xs text-[#78877D] mt-0.5">
+          A leitura e validação do arquivo acontecem no seu navegador. Ao confirmar, os
+          eventos válidos são enviados ao backend, que é quem os persiste e passa a
+          servi-los ao dashboard.
+        </p>
       </div>
 
       {/* Success / Error notification */}
@@ -259,21 +247,23 @@ export const Import: React.FC<ImportProps> = ({ onImportSuccess, dataSource }) =
         </div>
       </div>
 
-      {/* Sample Templates Download Box */}
+      {/* Format Templates Download Box */}
       <div className="p-4 bg-white rounded-xl border border-[#E4ECE6] flex flex-col sm:flex-row sm:items-center justify-between gap-4">
         <div>
           <h4 className="text-xs font-bold text-[#25372D]">
-            Não possui um arquivo de logs do carrinho em mãos?
+            Referência de formato esperado
           </h4>
           <p className="text-xs text-[#78877D]">
-            Baixe modelos com a estrutura padronizada da linguagem do carrinho para testes locais.
+            Modelos com a estrutura de campos aceita pelo parser — úteis para quem for
+            implementar a exportação de logs. Contêm apenas marcadores, não dados
+            operacionais.
           </p>
         </div>
 
         <div className="flex items-center gap-2 shrink-0">
           <button
             type="button"
-            onClick={() => handleDownloadSample('json')}
+            onClick={() => handleDownloadTemplate('json')}
             className="flex items-center gap-1.5 px-3 py-1.5 rounded-lg border border-[#E4ECE6] text-xs font-medium text-[#25372D] hover:bg-[#F7FAF8] transition-colors"
           >
             <Download className="w-3.5 h-3.5 text-[#245C43]" />
@@ -282,7 +272,7 @@ export const Import: React.FC<ImportProps> = ({ onImportSuccess, dataSource }) =
 
           <button
             type="button"
-            onClick={() => handleDownloadSample('csv')}
+            onClick={() => handleDownloadTemplate('csv')}
             className="flex items-center gap-1.5 px-3 py-1.5 rounded-lg border border-[#E4ECE6] text-xs font-medium text-[#25372D] hover:bg-[#F7FAF8] transition-colors"
           >
             <Download className="w-3.5 h-3.5 text-[#245C43]" />
@@ -319,11 +309,15 @@ export const Import: React.FC<ImportProps> = ({ onImportSuccess, dataSource }) =
               <button
                 type="button"
                 onClick={handleConfirmImport}
-                disabled={parseResult.validEvents.length === 0}
+                disabled={parseResult.validEvents.length === 0 || isSending}
                 className="flex items-center gap-1.5 px-4 py-2 rounded-lg text-xs font-bold text-[#245C43] bg-[#BFE8D0] hover:bg-[#aee0c2] transition-colors disabled:opacity-40 shadow-xs"
               >
                 <Check className="w-4 h-4" />
-                <span>Aplicar {parseResult.validEvents.length} Logs</span>
+                <span>
+                  {isSending
+                    ? 'Enviando ao backend...'
+                    : `Enviar ${parseResult.validEvents.length} Logs`}
+                </span>
               </button>
             </div>
           </div>

@@ -3,7 +3,7 @@
  * SPDX-License-Identifier: Apache-2.0
  */
 
-import React, { useState, useEffect } from 'react';
+import React, { useState, useEffect, useCallback } from 'react';
 import { Sidebar, NavPage } from './components/layout/Sidebar';
 import { Header } from './components/layout/Header';
 import { Dashboard } from './pages/Dashboard';
@@ -12,48 +12,34 @@ import { Logs } from './pages/Logs';
 import { Alerts } from './pages/Alerts';
 import { Performance } from './pages/Performance';
 import { Import } from './pages/Import';
-import { getDataSource, subscribeToStore } from './services/store';
 import { getAlerts } from './services/alertsService';
-import { DataSourceType } from './types';
 
 export default function App() {
   const [currentPage, setCurrentPage] = useState<NavPage>('dashboard');
   const [isMobileOpen, setIsMobileOpen] = useState(false);
   const [refreshTrigger, setRefreshTrigger] = useState(0);
   const [isRefreshing, setIsRefreshing] = useState(false);
-  const [dataSource, setDataSourceState] = useState<DataSourceType>(getDataSource());
   const [activeAlertCount, setActiveAlertCount] = useState(0);
 
-  // Subscribe to changes in data store
-  useEffect(() => {
-    const updateStats = async () => {
-      setDataSourceState(getDataSource());
-      try {
-        const unacked = await getAlerts({ status: 'unacknowledged' });
-        setActiveAlertCount(unacked.length);
-      } catch {
-        // Ignore
-      }
-    };
-
-    updateStats();
-    const unsubscribe = subscribeToStore(() => {
-      updateStats();
-      setRefreshTrigger((prev) => prev + 1);
-    });
-
-    return () => unsubscribe();
+  const loadAlertCount = useCallback(async () => {
+    try {
+      const unacked = await getAlerts({ status: 'unacknowledged' });
+      setActiveAlertCount(unacked.length);
+    } catch {
+      // O badge é informativo: a falha em si é relatada dentro de cada página.
+      setActiveAlertCount(0);
+    }
   }, []);
+
+  useEffect(() => {
+    loadAlertCount();
+  }, [loadAlertCount]);
 
   const handleRefresh = async () => {
     setIsRefreshing(true);
     setRefreshTrigger((prev) => prev + 1);
-    try {
-      const unacked = await getAlerts({ status: 'unacknowledged' });
-      setActiveAlertCount(unacked.length);
-    } finally {
-      setTimeout(() => setIsRefreshing(false), 400);
-    }
+    await loadAlertCount();
+    setTimeout(() => setIsRefreshing(false), 400);
   };
 
   const getPageTitle = (page: NavPage): { title: string; subtitle: string } => {
@@ -86,7 +72,7 @@ export default function App() {
       case 'import':
         return {
           title: 'Importar Dados',
-          subtitle: 'Carregue arquivos de telemetria JSON ou CSV no navegador',
+          subtitle: 'Envie arquivos de telemetria JSON ou CSV para o backend',
         };
     }
   };
@@ -99,7 +85,6 @@ export default function App() {
       <Sidebar
         currentPage={currentPage}
         onNavigate={setCurrentPage}
-        dataSource={dataSource}
         isOpenMobile={isMobileOpen}
         onCloseMobile={() => setIsMobileOpen(false)}
         alertCount={activeAlertCount}
@@ -113,7 +98,6 @@ export default function App() {
           onOpenMobile={() => setIsMobileOpen(true)}
           onRefresh={handleRefresh}
           isRefreshing={isRefreshing}
-          dataSource={dataSource}
           onNavigateToImport={() => setCurrentPage('import')}
         />
 
@@ -128,27 +112,16 @@ export default function App() {
             />
           )}
 
-          {currentPage === 'missions' && (
-            <Missions refreshTrigger={refreshTrigger} />
-          )}
+          {currentPage === 'missions' && <Missions refreshTrigger={refreshTrigger} />}
 
-          {currentPage === 'logs' && (
-            <Logs refreshTrigger={refreshTrigger} />
-          )}
+          {currentPage === 'logs' && <Logs refreshTrigger={refreshTrigger} />}
 
-          {currentPage === 'alerts' && (
-            <Alerts refreshTrigger={refreshTrigger} />
-          )}
+          {currentPage === 'alerts' && <Alerts refreshTrigger={refreshTrigger} />}
 
-          {currentPage === 'performance' && (
-            <Performance refreshTrigger={refreshTrigger} />
-          )}
+          {currentPage === 'performance' && <Performance refreshTrigger={refreshTrigger} />}
 
           {currentPage === 'import' && (
-            <Import
-              onImportSuccess={() => setRefreshTrigger((prev) => prev + 1)}
-              dataSource={dataSource}
-            />
+            <Import onImportSuccess={() => setRefreshTrigger((prev) => prev + 1)} />
           )}
         </main>
       </div>
