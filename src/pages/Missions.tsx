@@ -17,10 +17,12 @@ import {
 } from 'lucide-react';
 import { Mission, MissionStatus, TimePeriod } from '../types';
 import { getMissions } from '../services/missionsService';
+import { toErrorMessage } from '../services/api';
 import { formatDateTime, formatDuration } from '../utils/formatters';
 import { MissionStatusBadge } from '../components/common/StatusBadge';
 import { Pagination } from '../components/common/Pagination';
 import { EmptyState } from '../components/common/EmptyState';
+import { ErrorState } from '../components/common/ErrorState';
 import { MissionDetailModal } from '../components/missions/MissionDetailModal';
 
 interface MissionsProps {
@@ -33,6 +35,8 @@ type SortOrder = 'asc' | 'desc';
 export const Missions: React.FC<MissionsProps> = ({ refreshTrigger }) => {
   const [missions, setMissions] = useState<Mission[]>([]);
   const [loading, setLoading] = useState<boolean>(true);
+  const [error, setError] = useState<string | null>(null);
+  const [retryCount, setRetryCount] = useState(0);
 
   // Filters
   const [search, setSearch] = useState('');
@@ -56,14 +60,19 @@ export const Missions: React.FC<MissionsProps> = ({ refreshTrigger }) => {
     let mounted = true;
     const loadMissions = async () => {
       setLoading(true);
+      setError(null);
       try {
-        const data = await getMissions();
+        const data = await getMissions({ period: periodFilter });
         if (mounted) {
           setMissions(data);
           setLoading(false);
         }
-      } catch {
-        if (mounted) setLoading(false);
+      } catch (err) {
+        if (mounted) {
+          setError(toErrorMessage(err));
+          setMissions([]);
+          setLoading(false);
+        }
       }
     };
 
@@ -71,7 +80,7 @@ export const Missions: React.FC<MissionsProps> = ({ refreshTrigger }) => {
     return () => {
       mounted = false;
     };
-  }, [refreshTrigger]);
+  }, [refreshTrigger, retryCount, periodFilter]);
 
   // Reset page when filters change
   const handleFilterChange = (setter: (val: any) => void, val: any) => {
@@ -243,6 +252,11 @@ export const Missions: React.FC<MissionsProps> = ({ refreshTrigger }) => {
           <div className="p-8 text-center text-xs text-[#78877D] animate-pulse">
             Carregando missões do carrinho...
           </div>
+        ) : error ? (
+          <ErrorState
+            message={error}
+            onRetry={() => setRetryCount((prev) => prev + 1)}
+          />
         ) : filteredMissions.length === 0 ? (
           <EmptyState
             title="Nenhuma missão encontrada"

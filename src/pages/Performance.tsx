@@ -32,6 +32,8 @@ import { KpiCard } from '../components/common/KpiCard';
 import { getMissions } from '../services/missionsService';
 import { getLogs } from '../services/logsService';
 import { getDashboardMetrics } from '../services/metricsService';
+import { toErrorMessage } from '../services/api';
+import { ErrorState } from '../components/common/ErrorState';
 import { DashboardMetrics, LogEvent, Mission } from '../types';
 import { formatDuration, formatPercent } from '../utils/formatters';
 
@@ -41,6 +43,8 @@ interface PerformanceProps {
 
 export const Performance: React.FC<PerformanceProps> = ({ refreshTrigger }) => {
   const [loading, setLoading] = useState(true);
+  const [error, setError] = useState<string | null>(null);
+  const [retryCount, setRetryCount] = useState(0);
   const [metrics, setMetrics] = useState<DashboardMetrics | null>(null);
   const [missions, setMissions] = useState<Mission[]>([]);
   const [logs, setLogs] = useState<LogEvent[]>([]);
@@ -49,6 +53,7 @@ export const Performance: React.FC<PerformanceProps> = ({ refreshTrigger }) => {
     let mounted = true;
     const load = async () => {
       setLoading(true);
+      setError(null);
       try {
         const [mMetrics, mMissions, mLogs] = await Promise.all([
           getDashboardMetrics(),
@@ -61,8 +66,14 @@ export const Performance: React.FC<PerformanceProps> = ({ refreshTrigger }) => {
           setLogs(mLogs);
           setLoading(false);
         }
-      } catch {
-        if (mounted) setLoading(false);
+      } catch (err) {
+        if (mounted) {
+          setError(toErrorMessage(err));
+          setMetrics(null);
+          setMissions([]);
+          setLogs([]);
+          setLoading(false);
+        }
       }
     };
 
@@ -70,7 +81,7 @@ export const Performance: React.FC<PerformanceProps> = ({ refreshTrigger }) => {
     return () => {
       mounted = false;
     };
-  }, [refreshTrigger]);
+  }, [refreshTrigger, retryCount]);
 
   // Stops per mission average
   const avgStopsPerMission = useMemo(() => {
@@ -168,6 +179,14 @@ export const Performance: React.FC<PerformanceProps> = ({ refreshTrigger }) => {
           Indicadores estatísticos consolidados das operações de transporte de pacotes.
         </p>
       </div>
+
+      {error ? (
+        <ErrorState
+          message={error}
+          onRetry={() => setRetryCount((prev) => prev + 1)}
+        />
+      ) : (
+      <>
 
       {/* KPI Historical Metrics */}
       <div className="grid grid-cols-2 sm:grid-cols-4 gap-4">
@@ -420,6 +439,9 @@ export const Performance: React.FC<PerformanceProps> = ({ refreshTrigger }) => {
           </div>
         </div>
       </div>
+
+      </>
+      )}
     </div>
   );
 };

@@ -16,9 +16,11 @@ import {
 } from 'lucide-react';
 import { Alert } from '../types';
 import { getAlerts, acknowledgeAlert } from '../services/alertsService';
+import { toErrorMessage } from '../services/api';
 import { formatDateTime } from '../utils/formatters';
 import { SeverityBadge } from '../components/common/StatusBadge';
 import { EmptyState } from '../components/common/EmptyState';
+import { ErrorState } from '../components/common/ErrorState';
 
 interface AlertsProps {
   refreshTrigger: number;
@@ -27,6 +29,9 @@ interface AlertsProps {
 export const Alerts: React.FC<AlertsProps> = ({ refreshTrigger }) => {
   const [alerts, setAlerts] = useState<Alert[]>([]);
   const [loading, setLoading] = useState(true);
+  const [error, setError] = useState<string | null>(null);
+  const [retryCount, setRetryCount] = useState(0);
+  const [ackError, setAckError] = useState<string | null>(null);
 
   // Filters
   const [search, setSearch] = useState('');
@@ -37,14 +42,19 @@ export const Alerts: React.FC<AlertsProps> = ({ refreshTrigger }) => {
     let mounted = true;
     const loadAlerts = async () => {
       setLoading(true);
+      setError(null);
       try {
         const data = await getAlerts();
         if (mounted) {
           setAlerts(data);
           setLoading(false);
         }
-      } catch {
-        if (mounted) setLoading(false);
+      } catch (err) {
+        if (mounted) {
+          setError(toErrorMessage(err));
+          setAlerts([]);
+          setLoading(false);
+        }
       }
     };
 
@@ -52,10 +62,18 @@ export const Alerts: React.FC<AlertsProps> = ({ refreshTrigger }) => {
     return () => {
       mounted = false;
     };
-  }, [refreshTrigger]);
+  }, [refreshTrigger, retryCount]);
 
   const handleAcknowledge = async (alertId: string) => {
-    await acknowledgeAlert(alertId);
+    setAckError(null);
+    try {
+      await acknowledgeAlert(alertId);
+    } catch (err) {
+      // O reconhecimento é persistido no backend: sem confirmação,
+      // o estado local não deve ser alterado.
+      setAckError(toErrorMessage(err));
+      return;
+    }
     setAlerts((prev) =>
       prev.map((a) => (a.id === alertId ? { ...a, acknowledged: true } : a))
     );
@@ -222,9 +240,17 @@ export const Alerts: React.FC<AlertsProps> = ({ refreshTrigger }) => {
         </div>
 
         <div className="text-[11px] text-[#78877D] bg-[#F7FAF8] p-2.5 rounded-lg border border-[#E4ECE6]">
-          <strong>Aviso de Observabilidade:</strong> O reconhecimento de um alerta é um controle local de interface para organização do operador e não garante a resolução física ou mecânica do carrinho.
+          <strong>Aviso de Observabilidade:</strong> O reconhecimento é registrado no backend para organização da equipe e não garante a resolução física ou mecânica do carrinho.
         </div>
       </div>
+
+      {/* Falha ao reconhecer um alerta no backend */}
+      {ackError && (
+        <div className="p-3 rounded-xl border border-[#F5B7B1] bg-[#FDEDEC] text-xs text-[#922B21]">
+          <span className="font-semibold">Não foi possível reconhecer o alerta: </span>
+          {ackError}
+        </div>
+      )}
 
       {/* Alerts Feed */}
       <div className="space-y-3">
@@ -232,6 +258,11 @@ export const Alerts: React.FC<AlertsProps> = ({ refreshTrigger }) => {
           <div className="p-12 text-center text-xs text-[#78877D] bg-white rounded-xl border border-[#E4ECE6] animate-pulse">
             Carregando alertas...
           </div>
+        ) : error ? (
+          <ErrorState
+            message={error}
+            onRetry={() => setRetryCount((prev) => prev + 1)}
+          />
         ) : filteredAlerts.length === 0 ? (
           <EmptyState
             title="Nenhum alerta registrado"

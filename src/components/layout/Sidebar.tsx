@@ -12,17 +12,13 @@ import {
   BarChart3,
   UploadCloud,
   Bot,
-  Database,
   X,
 } from 'lucide-react';
-import { DataSourceType } from '../../types';
-
 export type NavPage = 'dashboard' | 'missions' | 'logs' | 'alerts' | 'performance' | 'import';
 
 interface SidebarProps {
   currentPage: NavPage;
   onNavigate: (page: NavPage) => void;
-  dataSource: DataSourceType;
   isOpenMobile: boolean;
   onCloseMobile: () => void;
   alertCount?: number;
@@ -31,7 +27,6 @@ interface SidebarProps {
 export const Sidebar: React.FC<SidebarProps> = ({
   currentPage,
   onNavigate,
-  dataSource,
   isOpenMobile,
   onCloseMobile,
   alertCount = 0,
@@ -121,36 +116,6 @@ export const Sidebar: React.FC<SidebarProps> = ({
         })}
       </nav>
 
-      {/* Data Source Footprint */}
-      <div className="p-4 border-t border-[#E4ECE6] bg-[#F7FAF8]">
-        <div className="flex items-center gap-2 mb-2">
-          <Database className="w-3.5 h-3.5 text-[#245C43]" />
-          <span className="text-[11px] font-bold text-[#245C43] uppercase tracking-wider">
-            Origem dos Dados
-          </span>
-        </div>
-
-        <div className="p-2.5 bg-white rounded-lg border border-[#E4ECE6] text-xs space-y-1">
-          <div className="flex items-center justify-between">
-            <span className="text-[#78877D]">Modo ativo:</span>
-            <span className="font-semibold text-[#25372D]">
-              {dataSource === 'mock'
-                ? 'Demonstração'
-                : dataSource === 'imported'
-                ? 'Arquivo Importado'
-                : 'API Backend'}
-            </span>
-          </div>
-
-          <p className="text-[11px] text-[#78877D] leading-tight">
-            {dataSource === 'mock'
-              ? 'Dados de exemplo de missões e paradas preventivas.'
-              : dataSource === 'imported'
-              ? 'Processamento em memória do log carregado.'
-              : 'Conexão ativa com serviços backend.'}
-          </p>
-        </div>
-      </div>
     </div>
   );
 
